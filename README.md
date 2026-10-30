@@ -50,6 +50,14 @@ MyGo selects `resources/darwin` and `resources/windows` for the corresponding pl
 
 On macOS, omit `-skip-dmg` to create a DMG. Windows installers require NSIS. The default artifacts are not Developer ID notarized or Windows code signed; see [MyGo's distribution documentation](https://mygo.egoist.dev/docs/distribution) for signing configuration.
 
+## GitHub releases
+
+The [Release workflow](.github/workflows/release.yml) builds a universal macOS DMG (Intel and Apple Silicon) and a Windows x64 installer EXE, both with bundled ADB. Each platform runs tests and static checks before building. MyGo downloads NSIS on the Windows runner when needed.
+
+To publish, update `version` in `mygo.json`, commit the change, and push a matching `v` tag (for example, `v0.1.0`). The workflow rejects tags that do not match the configured version. Once both builds succeed, a separate job publishes the installers to a GitHub Release using the built-in `GITHUB_TOKEN`; no additional secrets are required.
+
+You can also select **Actions > Release > Run workflow** to build downloadable artifacts without publishing a release. Outputs are `app-house-<version>.dmg` and `app-house-setup-<version>-amd64.exe`. These builds use ad hoc macOS signing without notarization and no Windows code signing.
+
 ## Operation behavior
 
 - **Install App:** installs a standalone APK on the current device for the selected Android user. The `-r` option allows updates while preserving existing app data. Installation does not automatically grant runtime permissions or allow version downgrades. Split APK sets, `.apks`, and `.xapk` bundles are not supported. The app list refreshes after completion.

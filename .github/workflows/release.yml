@@ -1,0 +1,99 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS universal DMG
+            os: macos-latest
+            platform: darwin/universal
+            adb: darwin
+            artifact: macos
+            path: build/darwin-universal/*.dmg
+          - name: Windows x64 installer
+            os: windows-latest
+            platform: windows/amd64
+            adb: windows
+            artifact: windows
+            path: build/windows-amd64/*-setup-*.exe
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+      - name: Check release version
+        if: github.event_name == 'push'
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          version = json.loads(Path("mygo.json").read_text(encoding="utf-8"))["version"]
+          tag = os.environ["GITHUB_REF_NAME"]
+          if tag != f"v{version}":
+              raise SystemExit(f"Tag {tag} must match mygo.json version v{version}")
+          PY
+      - name: Validate
+        run: |
+          go test ./...
+          go vet ./...
+          go tool mygo vet
+      - name: Bundle ADB
+        run: python scripts/bundle-adb.py "${{ matrix.adb }}"
+      # MyGo downloads NSIS automatically on Windows when it is not installed.
+      # Publishing belongs to the release job; these builds need no signing secrets.
+      - name: Build installer
+        run: go tool mygo build -platform "${{ matrix.platform }}" -sign=- -skip-notarize
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.artifact }}
+          path: ${{ matrix.path }}
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub release
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    permissions:
+      contents: write
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: artifacts
+          merge-multiple: true
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" artifacts/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --verify-tag \
+            --title "$GITHUB_REF_NAME" \
+            --notes ''
