@@ -16,13 +16,20 @@ var pipeKernel = syscall.NewLazyDLL("kernel32.dll")
 var createNamedPipe = pipeKernel.NewProc("CreateNamedPipeW")
 var connectNamedPipe = pipeKernel.NewProc("ConnectNamedPipe")
 
+const (
+	errorNoData        syscall.Errno = 232
+	errorPipeConnected syscall.Errno = 535
+	errorPipeListening syscall.Errno = 536
+)
+
 type namedPipeReader struct {
-	mu        sync.Mutex
-	handle    syscall.Handle
-	connected bool
-	ctx       context.Context
-	cancel    context.CancelFunc
-	closed    bool
+	mu           sync.Mutex
+	handle       syscall.Handle
+	connected    bool
+	writerClosed bool
+	ctx          context.Context
+	cancel       context.CancelFunc
+	closed       bool
 }
 
 func newStreamPipe() (*streamPipe, error) {
@@ -58,9 +65,18 @@ func (p *namedPipeReader) Read(b []byte) (int, error) {
 		}
 		if !p.connected {
 			ok, _, err := connectNamedPipe.Call(uintptr(p.handle), 0)
-			if ok != 0 || errors.Is(err, syscall.Errno(535)) {
+			switch {
+			case ok != 0:
+				// With PIPE_NOWAIT, success only makes the pipe available;
+				// ERROR_PIPE_CONNECTED confirms that a client connected.
+			case errors.Is(err, errorPipeConnected):
 				p.connected = true
-			} else if !errors.Is(err, syscall.Errno(536)) && !errors.Is(err, syscall.Errno(232)) {
+			case errors.Is(err, errorNoData):
+				// The client already connected and closed. Drain its buffered
+				// bytes instead of waiting for a connection that has ended.
+				p.connected, p.writerClosed = true, true
+			case errors.Is(err, errorPipeListening):
+			default:
 				p.mu.Unlock()
 				return 0, err
 			}
@@ -70,14 +86,15 @@ func (p *namedPipeReader) Read(b []byte) (int, error) {
 		if p.connected {
 			err = syscall.ReadFile(p.handle, b, &n, nil)
 		}
+		writerClosed := p.writerClosed
 		p.mu.Unlock()
 		if n > 0 {
 			return int(n), nil
 		}
-		if errors.Is(err, syscall.ERROR_BROKEN_PIPE) {
+		if errors.Is(err, syscall.ERROR_BROKEN_PIPE) || (writerClosed && (err == nil || errors.Is(err, errorNoData))) {
 			return 0, io.EOF
 		}
-		if err != nil && !errors.Is(err, syscall.Errno(232)) && !errors.Is(err, syscall.Errno(536)) {
+		if err != nil && !errors.Is(err, errorNoData) && !errors.Is(err, errorPipeListening) {
 			return 0, err
 		}
 		select {
