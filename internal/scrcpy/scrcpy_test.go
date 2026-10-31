@@ -18,11 +18,18 @@ import (
 	"time"
 )
 
+// Windows tests override this to reproduce inherited Ctrl+C suppression.
+var prepareHelperSignals = func() error { return nil }
+
 // The test binary doubles as an actual child executable, including on Windows.
 func TestMain(m *testing.M) {
 	if os.Getenv("APPHOUSE_TEST_SCRCPY_HELPER") == "1" {
 		stop := make(chan os.Signal, 1)
 		signal.Notify(stop, os.Interrupt)
+		if err := prepareHelperSignals(); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
 		fmt.Println("ready", os.Getenv("ADB"))
 		if err := streamHelperOutput(); err != nil {
 			fmt.Fprintln(os.Stderr, err)
@@ -93,12 +100,28 @@ func waitReady(t *testing.T, s *Session) {
 	}
 }
 
-func TestSessionGracefulStop(t *testing.T) {
-	c := helperConfig(t)
-	s, err := Start(t.Context(), c)
+func startHelperSession(t *testing.T, ctx context.Context, c Config) *Session {
+	t.Helper()
+	s, err := Start(ctx, c)
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Always reap children before the test binary is removed, even when an
+	// assertion aborts before Stop. Context cancellation alone is asynchronous.
+	t.Cleanup(func() {
+		select {
+		case <-s.Done():
+		default:
+			_ = s.cmd.Process.Kill()
+			<-s.Done()
+		}
+	})
+	return s
+}
+
+func TestSessionGracefulStop(t *testing.T) {
+	c := helperConfig(t)
+	s := startHelperSession(t, t.Context(), c)
 	waitReady(t, s)
 	ctx, cancel := context.WithTimeout(t.Context(), 15*time.Second)
 	defer cancel()
@@ -119,13 +142,23 @@ func TestSessionGracefulStop(t *testing.T) {
 	}
 }
 
+func TestHelperCleanupWaitsForExit(t *testing.T) {
+	var session *Session
+	t.Run("return without stopping", func(t *testing.T) {
+		session = startHelperSession(t, t.Context(), helperConfig(t))
+		waitReady(t, session)
+	})
+	select {
+	case <-session.Done():
+	default:
+		t.Fatal("helper still running after test cleanup")
+	}
+}
+
 func TestSessionExitFailure(t *testing.T) {
 	c := helperConfig(t)
 	t.Setenv("APPHOUSE_TEST_SCRCPY_FAIL", "1")
-	s, err := Start(t.Context(), c)
-	if err != nil {
-		t.Fatal(err)
-	}
+	s := startHelperSession(t, t.Context(), c)
 	if err := s.Wait(); err == nil || !strings.Contains(err.Error(), "device disconnected") {
 		t.Fatalf("missing process failure: %v", err)
 	}
@@ -134,15 +167,9 @@ func TestSessionExitFailure(t *testing.T) {
 func TestCancelStopsOnlyItsSession(t *testing.T) {
 	c := helperConfig(t)
 	ctx, cancel := context.WithCancel(t.Context())
-	first, err := Start(ctx, c)
-	if err != nil {
-		t.Fatal(err)
-	}
-	second, err := Start(t.Context(), c)
-	if err != nil {
-		cancel()
-		t.Fatal(err)
-	}
+	defer cancel()
+	first := startHelperSession(t, ctx, c)
+	second := startHelperSession(t, t.Context(), c)
 	waitReady(t, first)
 	waitReady(t, second)
 	cancel()
