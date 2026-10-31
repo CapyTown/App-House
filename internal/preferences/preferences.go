@@ -29,9 +29,10 @@ type Device struct {
 }
 
 type Config struct {
-	Language string   `json:"language,omitzero"`
-	ADBPath  string   `json:"adbPath"`
-	Devices  []Device `json:"devices"`
+	Language  string        `json:"language,omitzero"`
+	ADBPath   string        `json:"adbPath"`
+	Devices   []Device      `json:"devices"`
+	Mirroring MirrorOptions `json:"mirroring,omitzero"`
 }
 
 func Path() (string, error) {

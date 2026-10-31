@@ -63,6 +63,9 @@ func TestSidebarDeviceSelectorShowsOnlyNames(t *testing.T) {
 			t.Errorf("extra device detail visible: %q", metadata)
 		}
 	}
+	if dir := os.Getenv("APPHOUSE_TEST_PREVIEWS"); dir != "" {
+		savePreview(t, tt, filepath.Join(dir, "device-selector.png"))
+	}
 }
 
 func TestLauncherRecoversModelFromSerialFallback(t *testing.T) {
@@ -359,6 +362,19 @@ func TestAcceptDevicesPersistsLateMetadataAndOfflineRendering(t *testing.T) {
 	tt := ui.NewTester(a.launcherView, 480, 540)
 	if !tt.HasText("OnePlus Ace 3") || !tt.HasText("Android 15 · USB") {
 		t.Fatalf("friendly name and connection details missing: %v", tt.Texts())
+	}
+}
+
+func TestLauncherOffersMirrorForOnlineForgottenDevice(t *testing.T) {
+	a := newApp()
+	a.config.Language = "zh-Hans"
+	a.devices = []adb.Device{{Serial: "online", State: "device", Model: "Phone"}}
+	tt := ui.NewTester(a.launcherView, 480, 540)
+	if err := tt.Click("设备操作"); err != nil {
+		t.Fatal(err)
+	}
+	if !tt.HasText("投屏") || tt.HasText("移除设备记录") {
+		t.Fatalf("wrong device actions: %v", tt.Texts())
 	}
 }
 

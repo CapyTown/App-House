@@ -7,6 +7,7 @@ A macOS and Windows Android app manager built with [MyGo Native UI](https://mygo
 The main window combines a device and category sidebar, a compact striped app table, and an optional permissions and signing inspector. Double-click an app row to open its details; use checkboxes to select apps for batch operations. The toolbar can hide the inspector again.
 
 - Discover USB devices and manage wireless debugging pairing, connections, and disconnections.
+- Mirror a device with scrcpy, record video, capture PNG screenshots, rotate the display, and send Back, Home, and Recent Apps commands.
 - List installed apps for a selected Android user, including system, disabled, and suspended apps.
 - Show icons, names, package names, versions, permission grants, signing subjects and organizations, and certificate SHA-256 fingerprints.
 - Resize table columns and sort by clicking headers. The status column follows the app name; suspended and disabled states appear in red.
@@ -31,6 +32,16 @@ Connect a phone, enable USB debugging, and authorize this computer on the phone.
 Use a saved device's three-dot menu in the chooser or **Settings > Connect** to forget it. This removes its local saved entry without disconnecting an active device or deleting operation history. A device becomes remembered again when it reconnects.
 
 ADB discovery checks `ANDROIDFUN_ADB`, bundled `platform-tools` beside the app (inside the app's Resources directory on macOS), development resources, PATH, and Android SDK locations, in that order. You can also choose an executable in **Settings > ADB**. Custom paths, remembered devices, and language preferences are stored in `AndroidFun/preferences.json` under the system user configuration directory. The configuration directory retains its original name for compatibility. Operation history is appended to `AndroidFun/history.jsonl` in the same directory (macOS: `~/Library/Application Support/AndroidFun/history.jsonl`; Windows: `%APPDATA%\AndroidFun\history.jsonl`). Each completed app operation is flushed to disk before the UI updates, including failed and canceled results. The history has no automatic retention limit. Unreadable records are reported without replacing the original file. History from versions that kept results only in memory cannot be recovered after those versions exit.
+
+## Screen mirroring
+
+Click **Mirror screen** in the main toolbar or a device's three-dot menu in the launcher. The device display and control rail share one resizable App House window. Click or drag on the display to tap or swipe on Android. Use the controls to start or stop recording, take a screenshot, rotate the display, or navigate Back, Home, and Recent Apps. Mirroring shows the device's foreground screen, independently of the app list's Android user filter. Android may hide protected content or reject input commands under device policy.
+
+Screenshots (PNG) and recordings (MP4) save directly to Downloads by default. In **Settings > Mirroring**, choose another capture folder or enable **Ask where to save each time**; the save dialog also offers MKV recordings. Existing files are preserved. While recording, elapsed time appears below the recording button. Recording uses a separate scrcpy session, so stopping it keeps the mirror open. Capture results are saved to local operation history. Closing the mirror, switching devices, or quitting App House ends the sessions and finalizes recordings. Rotation controls require Android's `cmd window user-rotation`; the original rotation policy is restored when the session ends.
+
+Mirroring settings are saved with the other preferences. They include **Stay awake** (`-w` / `--stay-awake`, while the device is plugged in), **Keep active** (`--keep-active`), turning off the device screen, always-on-top, audio, touch indicators, the desktop screensaver, maximum video size, frame rate, and video bit rate. New settings apply to the next session. Stay awake does not bypass a locked device's authentication.
+
+scrcpy discovery checks a custom executable in Settings, `APPHOUSE_SCRCPY`, bundled platform resources, development resources, and installed scrcpy. Official packages include scrcpy **5.0.1**, its matching Android server, and its runtime dependencies. macOS selects the Intel or Apple Silicon binary automatically. App House passes the currently configured ADB executable and selected device explicitly to scrcpy. The embedded display uses a private local pipe and an FFmpeg decoder; no local streaming port is opened. FFmpeg discovery checks `APPHOUSE_FFMPEG`, bundled resources, development resources, and installed FFmpeg. Keyboard text entry and scrcpy keyboard shortcuts are not currently forwarded by the embedded display.
 
 ## Build and bundle ADB
 

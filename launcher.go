@@ -13,7 +13,11 @@ import (
 )
 
 func (a *app) invalidateWindows() {
-	for _, win := range []*mygo.Window{a.win, a.settingsWindow} {
+	windows := []*mygo.Window{a.win, a.settingsWindow}
+	if a.mirror != nil {
+		windows = append(windows, a.mirror.window)
+	}
+	for _, win := range windows {
 		if win != nil && !win.IsDestroyed() {
 			win.Invalidate()
 		}
@@ -124,6 +128,14 @@ func (a *app) forgetDevice(serial string) {
 }
 
 func (a *app) deviceMenu(m *ui.Menu, serial string) {
+	if a.deviceOnline(serial) {
+		if m.Item(a.tr("投屏")).Disabled(!a.canMirrorDevice(serial)).Chosen() {
+			a.openMirrorDevice(serial)
+		}
+		if a.deviceRemembered(serial) {
+			m.Separator()
+		}
+	}
 	if a.deviceRemembered(serial) {
 		if m.Item(a.tr("移除设备记录")).Disabled(a.busy).Chosen() {
 			a.forgetDevice(serial)
@@ -328,11 +340,11 @@ func (a *app) launcherView(c *ui.Context) {
 					state = a.tr("待授权")
 				}
 				ui.Box(c).Size(8, 8).Radius(4).Background(color).Tooltip(state + " · " + device.Serial)
-				if a.deviceRemembered(device.Serial) {
+				if a.deviceRemembered(device.Serial) || a.deviceOnline(device.Serial) {
 					iconButton(c, a.tr("设备操作"), moreGlyph, a.busy).TextColor(muted).PopoverMenuButton(func(m *ui.Menu) { a.deviceMenu(m, device.Serial) })
 				}
 			})
-			if a.deviceRemembered(device.Serial) {
+			if a.deviceRemembered(device.Serial) || a.deviceOnline(device.Serial) {
 				row.PopoverMenu(func(m *ui.Menu) { a.deviceMenu(m, device.Serial) })
 			}
 			if row.RowDoubleClicked() {

@@ -50,6 +50,12 @@ func (a *app) historyErrorText() string {
 }
 
 func (a *app) historyAction(entry history.Entry) string {
+	if entry.Action == "screenshot" {
+		return a.tr("截屏")
+	}
+	if entry.Action == "record" {
+		return a.tr("录屏")
+	}
 	if entry.Action == "install" {
 		return a.tr("安装")
 	}

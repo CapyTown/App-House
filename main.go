@@ -38,6 +38,7 @@ type operationResult struct {
 const appName = "App House"
 
 type app struct {
+	mirror                                  *mirrorState
 	locale                                  string
 	settingsWindow                          *mygo.Window
 	settingsTab                             int
@@ -154,6 +155,7 @@ func enrichDeviceInfo(ctx context.Context, client adb.Client, devices, previous 
 }
 
 func (a *app) clearDevice() {
+	a.closeMirror()
 	a.serial, a.userLabel, a.users, a.rows = "", "", nil, nil
 	a.list = ui.ListState{Columns: a.list.Columns}
 	a.detailOpen, a.confirmOpen = false, false
@@ -506,7 +508,10 @@ func main() {
 	a.loadPreferences()
 	a.loadHistory()
 	mygo.App.SetLanguages("en", "zh-Hans")
-	mygo.App.OnQuit(cancel)
+	mygo.App.OnQuit(func() {
+		a.shutdownMirror()
+		cancel()
+	})
 	mygo.App.OnLocaleChanged(func(locale string) {
 		if a.settingsWindow != nil && !a.settingsWindow.IsDestroyed() {
 			a.settingsWindow.SetTitle(translate(locale, "设置"))

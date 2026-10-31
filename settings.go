@@ -41,7 +41,7 @@ func (a *app) settingsView(c *ui.Context) {
 			ui.Text(c, a.tr("设置")).FontSize(18).FontWeight(600)
 		})
 		ui.Row(c).Padding(4, 24, 12).Justify(ui.Center).Children(func() {
-			ui.Segmented(c, &a.settingsTab, a.tr("连接"), "ADB", a.tr("操作记录")).Height(32).Label(a.tr("设置分类"))
+			ui.Segmented(c, &a.settingsTab, a.tr("连接"), "ADB", a.tr("操作记录"), a.tr("投屏")).Height(36).Label(a.tr("设置分类"))
 		})
 		a.languageSettings(c)
 		ui.Divider(c)
@@ -51,6 +51,8 @@ func (a *app) settingsView(c *ui.Context) {
 				a.adbSettings(c)
 			case 2:
 				a.historySettings(c)
+			case 3:
+				a.mirrorSettings(c)
 			default:
 				a.connectionSettings(c)
 			}

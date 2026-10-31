@@ -218,6 +218,9 @@ func (a *app) toolbar(c *ui.Context) {
 		}
 
 		ui.Row(c).Gap(2).Children(func() {
+			if iconButton(c, a.tr("投屏"), mirrorGlyph, !a.canMirror()).Clicked() {
+				a.openMirror()
+			}
 			if a.busy {
 				if iconButton(c, a.tr("取消任务"), closeGlyph, false).Clicked() {
 					a.cancel()
