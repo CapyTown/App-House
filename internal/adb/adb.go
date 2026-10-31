@@ -216,7 +216,7 @@ func (c *Client) Apply(ctx context.Context, serial string, user int, action Acti
 	if !packagePattern.MatchString(packageName) {
 		return errors.New("invalid Android package name")
 	}
-	if action != Uninstall && action != Suspend && action != Unsuspend {
+	if action != Uninstall && action != Suspend && action != Unsuspend && action != Disable && action != Enable {
 		return fmt.Errorf("unsupported action: %s", action)
 	}
 	output, err := c.shell(ctx, serial, "pm", string(action), "--user", strconv.Itoa(user), packageName)
@@ -224,8 +224,13 @@ func (c *Client) Apply(ctx context.Context, serial string, user int, action Acti
 		return err
 	}
 	want := "Success"
-	if action != Uninstall {
+	switch action {
+	case Suspend, Unsuspend:
 		want = fmt.Sprintf("Package %s new suspended state: %t", packageName, action == Suspend)
+	case Disable:
+		want = fmt.Sprintf("Package %s new state: disabled-user", packageName)
+	case Enable:
+		want = fmt.Sprintf("Package %s new state: enabled", packageName)
 	}
 	for line := range strings.SplitSeq(string(output), "\n") {
 		if strings.TrimSpace(line) == want {

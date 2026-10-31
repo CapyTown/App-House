@@ -177,7 +177,7 @@ func TestBottomSelectionControls(t *testing.T) {
 	if tt.HasText("选择当前结果") || !tt.HasText("已选 0") {
 		t.Fatal("selection count must replace old label")
 	}
-	for _, label := range []string{"恢复", "暂停", "卸载"} {
+	for _, label := range []string{"恢复", "禁止", "卸载"} {
 		if _, found := tt.Find(label); found {
 			t.Fatalf("%s must be hidden without selection", label)
 		}
@@ -194,7 +194,7 @@ func TestBottomSelectionControls(t *testing.T) {
 	if count.Y <= name.Y || cancel.X <= count.X {
 		t.Fatal("selection controls must be at bottom with cancel on right")
 	}
-	for _, label := range []string{"恢复", "暂停", "卸载"} {
+	for _, label := range []string{"恢复", "禁止", "卸载"} {
 		action, found := tt.Find(label)
 		if !found || action.Y <= name.Y || action.X <= cancel.X {
 			t.Fatalf("%s must appear on the bottom right after selection", label)
@@ -203,7 +203,7 @@ func TestBottomSelectionControls(t *testing.T) {
 	// Details must not squeeze batch actions outside the minimum window.
 	a.inspectorVisible = true
 	tt.SetSize(1060, 680)
-	for _, label := range []string{"恢复", "暂停", "卸载"} {
+	for _, label := range []string{"恢复", "禁止", "卸载"} {
 		action, found := tt.Find(label)
 		if !found || action.X < 232 || action.X+action.W > 1060 || action.Y+action.H > 680 {
 			t.Fatalf("%s clipped with details open: %+v", label, action)

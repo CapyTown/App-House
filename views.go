@@ -271,11 +271,10 @@ func (a *app) selectionBar(c *ui.Context) {
 		}
 		ui.Box(c).Grow(1)
 		if selected > 0 {
-			if ui.Button(c, a.tr("恢复")).Height(40).Padding(0, 18).Radius(20).Disabled(a.busy).Clicked() {
-				a.prepare(adb.Unsuspend)
-			}
-			if ui.Button(c, a.tr("暂停")).Height(40).Padding(0, 18).Radius(20).Disabled(a.busy).Clicked() {
-				a.prepare(adb.Suspend)
+			for _, action := range []adb.Action{adb.Unsuspend, adb.Suspend} {
+				if ui.Button(c, a.actionTitle(action)).Height(40).Padding(0, 18).Radius(20).Disabled(a.busy).Clicked() {
+					a.prepare(action)
+				}
 			}
 			if ui.Button(c, a.tr("卸载")).Height(40).Padding(0, 18).Radius(20).TextColor(t.Danger).Disabled(a.busy).Clicked() {
 				a.prepare(adb.Uninstall)
@@ -300,7 +299,8 @@ func (a *app) appList(c *ui.Context, visible []int, colors viewColors) {
 	a.list.Sort = &a.sortOrder
 	a.list.KeepOffset = true
 	a.list.RoundRows = true
-	a.list.CellMenu = func(m *ui.Menu, index, _ int) {
+	a.list.CellMenu = nil
+	appMenu := func(m *ui.Menu, index int) {
 		r := a.rows[visible[index]]
 		count := 1
 		if r.selected {
@@ -337,6 +337,7 @@ func (a *app) appList(c *ui.Context, visible []int, colors viewColors) {
 			text, muted = t.AccentText, ui.Hex("#dcecff")
 		}
 		cell := ui.Row(c).FillWidth().Height(42).Gap(12).AlignItems(ui.Center)
+		cell.PopoverMenu(func(m *ui.Menu) { appMenu(m, index) })
 		if column == 0 && index%2 == 1 {
 			stripes = append(stripes, cell)
 		}

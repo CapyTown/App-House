@@ -56,7 +56,7 @@
   "应用详情": "App details",
   "开启 USB 调试并在手机上允许此电脑。": "Enable USB debugging and authorize this computer on your phone.",
   "待授权": "Awaiting authorization",
-  "恢复": "Resume",
+  "恢复": "Restore",
   "成功": "Succeeded",
   "批量操作完成后，可在这里查看每个应用的结果。": "Results for each app appear here after a batch operation completes.",
   "授权状态来自 PackageManager；实际访问仍可能受 AppOps、一次性授权及设备策略限制。": "Grant status comes from PackageManager. Actual access may still be restricted by AppOps, one-time permissions, or device policy.",
@@ -143,5 +143,12 @@
   "仅支持单个 APK 文件；请逐个安装。": "Only one APK is supported at a time.",
   "请先选择在线设备和 Android 用户。": "Select an online device and Android user first.",
   "安装成功，但刷新应用失败：%v": "Installation succeeded, but refreshing apps failed: %v",
-  "刷新重试。": "Refresh to try again."
+  "刷新重试。": "Refresh to try again.",
+  "停用": "Disable",
+  "启用": "Enable",
+  "停用将对所选用户禁用应用，保留应用数据；可通过启用恢复。适用于不支持暂停的 Android 电视。": "Disable turns off the apps for the selected user while preserving their data. Enable restores them. Use this on Android TVs that do not support suspension.",
+  "启用将恢复所选用户已停用的应用，不会解除暂停状态。": "Enable restores disabled apps for the selected user. It does not clear suspension.",
+  "禁止": "Block",
+  "禁止会先尝试暂停应用；设备不支持时自动改为停用。恢复会按应用状态解除暂停或重新启用，应用数据会保留。": "Block first tries suspension, then disables the app if the device does not support it. Restore clears suspension or re-enables the app as needed, preserving app data.",
+  "成功（已解除暂停并启用）": "Success (resumed and enabled)"
 }

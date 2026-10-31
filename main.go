@@ -32,6 +32,7 @@ type batch struct {
 type operationResult struct {
 	Package, Action, Message string
 	OK                       bool
+	Applied                  []adb.Action
 }
 
 const appName = "App House"
@@ -276,9 +277,13 @@ func (a *app) actionTitle(action adb.Action) string {
 	case adb.Uninstall:
 		return a.tr("卸载")
 	case adb.Suspend:
-		return a.tr("暂停")
+		return a.tr("禁止")
 	case adb.Unsuspend:
 		return a.tr("恢复")
+	case adb.Disable:
+		return a.tr("停用")
+	case adb.Enable:
+		return a.tr("启用")
 	}
 	return string(action)
 }
@@ -318,18 +323,23 @@ func (a *app) executeBatch() {
 			a.results, a.resultsOpen = results, true
 			// Keep failed selections for retry and reconcile only confirmed successes.
 			for _, r := range results {
-				if !r.OK {
-					continue
-				}
-				if b.action == adb.Uninstall {
-					a.rows = slices.DeleteFunc(a.rows, func(row appRow) bool { return row.PackageName == r.Package })
-				} else {
-					for i := range a.rows {
-						if a.rows[i].PackageName == r.Package {
-							a.rows[i].Suspended = b.action == adb.Suspend
+				for i := range a.rows {
+					if a.rows[i].PackageName == r.Package {
+						for _, action := range r.Applied {
+							switch action {
+							case adb.Suspend, adb.Unsuspend:
+								a.rows[i].Suspended = action == adb.Suspend
+							case adb.Disable, adb.Enable:
+								a.rows[i].Enabled = action == adb.Enable
+							}
+						}
+						if r.OK {
 							a.rows[i].selected = false
 						}
 					}
+				}
+				if r.OK && b.action == adb.Uninstall {
+					a.rows = slices.DeleteFunc(a.rows, func(row appRow) bool { return row.PackageName == r.Package })
 				}
 			}
 			if i := slices.IndexFunc(a.rows, func(row appRow) bool { return row.PackageName == a.detail.PackageName }); i >= 0 {
@@ -365,8 +375,12 @@ func (a *app) dialogs(c *ui.Context) {
 	a.modal(c, &a.confirmOpen, a.tr("确认批量")+a.actionTitle(a.pending.action), 700, 560, func() {
 		b := a.pending
 		ui.Textf(c, a.tr("设备 %s · Android 用户 %d · %d 个应用"), b.serial, b.user, len(b.apps)).Bold()
-		message := a.tr("暂停使用 Android 的 suspend 功能；恢复可解除暂停。设备策略可能拒绝部分操作。")
-		if b.action == adb.Uninstall {
+		message := a.tr("禁止会先尝试暂停应用；设备不支持时自动改为停用。恢复会按应用状态解除暂停或重新启用，应用数据会保留。")
+		if b.action == adb.Disable {
+			message = a.tr("停用将对所选用户禁用应用，保留应用数据；可通过启用恢复。适用于不支持暂停的 Android 电视。")
+		} else if b.action == adb.Enable {
+			message = a.tr("启用将恢复所选用户已停用的应用，不会解除暂停状态。")
+		} else if b.action == adb.Uninstall {
 			message = a.tr("卸载将移除此用户的应用及其数据，无法撤销。系统应用仅对该用户移除，不会删除系统分区中的 APK。")
 		}
 		ui.Text(c, message).TextColor(t.Warning)

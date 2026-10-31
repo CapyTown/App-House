@@ -3,6 +3,7 @@ package adb
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -32,6 +33,27 @@ func TestApplyTargetsDeviceAndUser(t *testing.T) {
 	}
 }
 
+func TestEnableAndDisableTargetExplicitUser(t *testing.T) {
+	for _, user := range []int{0, 10} {
+		for _, action := range []Action{Disable, Enable} {
+			client := Client{Path: "adb", run: func(_ context.Context, _ string, args ...string) ([]byte, error) {
+				want := []string{"-s", "192.168.50.101:5555", "shell", fmt.Sprintf("'pm' '%s' '--user' '%d' 'com.example.app'", action, user)}
+				if !reflect.DeepEqual(args, want) {
+					t.Fatalf("command = %v; want %v", args, want)
+				}
+				state := "enabled"
+				if action == Disable {
+					state = "disabled-user"
+				}
+				return []byte("Package com.example.app new state: " + state), nil
+			}}
+			if err := client.Apply(t.Context(), "192.168.50.101:5555", user, action, "com.example.app"); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+}
+
 func TestApplyChecksActualResult(t *testing.T) {
 	for _, test := range []struct {
 		name   string
@@ -42,6 +64,12 @@ func TestApplyChecksActualResult(t *testing.T) {
 		{"uninstall success", Uninstall, "Success\n", true},
 		{"uninstall failure exit zero", Uninstall, "Failure [DELETE_FAILED_INTERNAL_ERROR]", false},
 		{"uninstall empty exit zero", Uninstall, "", false},
+		{"disable", Disable, "WARNING: linker: unused DT entry\nPackage android new state: disabled-user", true},
+		{"enable", Enable, "Package android new state: enabled", true},
+		{"disable refused", Disable, "Package android new state: enabled", false},
+		{"enable refused", Enable, "Package android new state: disabled-user", false},
+		{"disable wrong package", Disable, "Package com.other new state: disabled-user", false},
+		{"enable empty", Enable, "", false},
 		{"suspend", Suspend, "Package android new suspended state: true", true},
 		{"suspend refused", Suspend, "Package android new suspended state: false", false},
 		{"suspend unsupported", Suspend, "Unknown command: suspend", false},
@@ -84,7 +112,7 @@ func TestRejectInvalidTargetsBeforeRunning(t *testing.T) {
 	if err := client.Apply(t.Context(), "device", -1, Suspend, "com.example"); err == nil {
 		t.Error("accepted all-users sentinel")
 	}
-	if err := client.Apply(t.Context(), "device", 0, "disable-user", "com.example"); err == nil {
+	if err := client.Apply(t.Context(), "device", 0, "clear", "com.example"); err == nil {
 		t.Error("accepted unsupported action")
 	}
 }

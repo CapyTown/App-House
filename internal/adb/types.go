@@ -41,4 +41,6 @@ const (
 	Uninstall Action = "uninstall"
 	Suspend   Action = "suspend"
 	Unsuspend Action = "unsuspend"
+	Disable   Action = "disable-user"
+	Enable    Action = "enable"
 )

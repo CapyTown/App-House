@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"slices"
+	"strings"
 	"time"
 
 	"androidfun/internal/adb"
@@ -56,7 +57,7 @@ func (a *app) historyAction(entry history.Entry) string {
 }
 
 func (a *app) historyMessage(entry history.Entry) string {
-	if entry.OK {
+	if entry.OK && (entry.Message == "成功" || entry.Message == "Success") {
 		return a.tr("成功")
 	}
 	return a.tr(entry.Message)
@@ -97,20 +98,85 @@ type batchClient interface {
 	Apply(context.Context, string, int, adb.Action, string) error
 }
 
+// Keep successful state changes even if a later step fails, and report the
+// concrete command for history instead of calling a disabled app suspended.
+func applyAppAction(ctx context.Context, client batchClient, b batch, app adb.App) (applied []adb.Action, actual adb.Action, err error) {
+	apply := func(action adb.Action) error {
+		actual = action
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if err := client.Apply(ctx, b.serial, b.user, action, app.PackageName); err != nil {
+			return err
+		}
+		applied = append(applied, action)
+		return nil
+	}
+	switch b.action {
+	case adb.Suspend:
+		err = apply(adb.Suspend)
+		if unsupportedPackageCommand(err, adb.Suspend) {
+			err = apply(adb.Disable)
+		}
+	case adb.Unsuspend:
+		if !app.Enabled && !app.Suspended {
+			err = apply(adb.Enable)
+		} else {
+			err = apply(adb.Unsuspend)
+			if !app.Suspended && unsupportedPackageCommand(err, adb.Unsuspend) {
+				err = apply(adb.Enable)
+			} else if err == nil && !app.Enabled {
+				err = apply(adb.Enable)
+			}
+		}
+	default:
+		err = apply(b.action)
+	}
+	return
+}
+
+func unsupportedPackageCommand(err error, action adb.Action) bool {
+	if err == nil || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	clean := strings.NewReplacer(":", " ", "'", " ", "\"", " ")
+	for line := range strings.SplitSeq(strings.ToLower(err.Error()), "\n") {
+		words := strings.Fields(clean.Replace(line))
+		for i := 0; i+2 < len(words); i++ {
+			if (words[i] == "unknown" || words[i] == "unsupported") && words[i+1] == "command" && words[i+2] == string(action) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 func runBatch(ctx context.Context, client batchClient, b batch, path string, tr func(string) string) ([]operationResult, []history.Entry, error) {
 	results := make([]operationResult, 0, len(b.apps))
 	entries := make([]history.Entry, 0, len(b.apps))
 	var saveErr error
 	for _, p := range b.apps {
 		result := operationResult{Package: p.PackageName}
+		actual := b.action
 		if ctx.Err() != nil {
 			result.Message = tr("已取消，未执行")
-		} else if err := client.Apply(ctx, b.serial, b.user, b.action, p.PackageName); err != nil {
-			result.Message = err.Error()
 		} else {
-			result.OK, result.Message = true, tr("成功")
+			var err error
+			result.Applied, actual, err = applyAppAction(ctx, client, b, p)
+			if err != nil {
+				result.Message = err.Error()
+				if len(result.Applied) > 0 {
+					result.Message = fmt.Sprintf("%s: %s; %s", result.Applied[0], tr("成功"), result.Message)
+				}
+			} else {
+				result.OK, result.Message = true, tr("成功")
+				if len(result.Applied) > 1 {
+					actual = b.action
+					result.Message = tr("成功（已解除暂停并启用）")
+				}
+			}
 		}
-		entry, err := recordOperation(path, b.serial, b.user, string(b.action), result)
+		entry, err := recordOperation(path, b.serial, b.user, string(actual), result)
 		if saveErr == nil {
 			saveErr = err
 		}

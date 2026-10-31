@@ -36,7 +36,7 @@ func TestOperationHistoryAccumulatesAndRestores(t *testing.T) {
 	if a.historyError != nil {
 		t.Fatal(a.historyError)
 	}
-	for _, action := range []adb.Action{adb.Suspend, adb.Unsuspend, adb.Uninstall} {
+	for _, action := range []adb.Action{adb.Suspend, adb.Unsuspend, adb.Enable, adb.Disable, adb.Uninstall} {
 		b := batch{serial: a.serial, user: a.userID, action: action, apps: []adb.App{a.rows[0].App, a.rows[1].App}}
 		savedBefore := len(a.history)
 		client := &historyBatchClient{apply: func(pkg string) error {
@@ -65,18 +65,18 @@ func TestOperationHistoryAccumulatesAndRestores(t *testing.T) {
 	apply()
 	restarted := newApp()
 	restarted.loadHistory()
-	if restarted.historyError != nil || len(restarted.history) != 7 || len(a.history) != 7 {
+	if restarted.historyError != nil || len(restarted.history) != 11 || len(a.history) != 11 {
 		t.Fatalf("history lost across batches/restart: %+v, %v", restarted.history, restarted.historyError)
 	}
 	for i, entry := range restarted.history {
 		if entry.Time.IsZero() || entry.Serial != "test-device" || entry.UserID != 10 {
 			t.Fatalf("missing operation metadata: %+v", entry)
 		}
-		if i < 6 && entry.OK != (i%2 == 0) {
+		if i < 10 && entry.OK != (i%2 == 0) {
 			t.Fatalf("lost failed result: %+v", entry)
 		}
 	}
-	if restarted.history[6].Action != "install" || restarted.history[6].Package != "example.apk" {
+	if restarted.history[10].Action != "install" || restarted.history[10].Package != "example.apk" {
 		t.Fatal("installation did not accumulate with batch history")
 	}
 }
@@ -134,7 +134,7 @@ func TestHistoryGroupsByLocalDateNewestFirst(t *testing.T) {
 		t.Fatalf("incorrect groups: %+v", rows)
 	}
 	tt := ui.NewTester(a.settingsView, 680, 1000)
-	for _, label := range []string{"2026-10-30", "2026-10-29", "2026-10-28", "4 operations", "12:30:00 · test-device · User 10", "Suspend · org.example.notes"} {
+	for _, label := range []string{"2026-10-30", "2026-10-29", "2026-10-28", "4 operations", "12:30:00 · test-device · User 10", "Block · org.example.notes"} {
 		if !tt.HasText(label) {
 			t.Errorf("missing history text %q", label)
 		}

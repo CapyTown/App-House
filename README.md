@@ -10,11 +10,11 @@ The main window combines a device and category sidebar, a compact striped app ta
 - List installed apps for a selected Android user, including system, disabled, and suspended apps.
 - Show icons, names, package names, versions, permission grants, signing subjects and organizations, and certificate SHA-256 fingerprints.
 - Resize table columns and sort by clicking headers. The status column follows the app name; suspended and disabled states appear in red.
-- View the selection count and clear selections in the taller bottom bar. Resume, Suspend, and Uninstall appear on its right only when apps are selected; app categories are in the sidebar.
-- Right-click any app row to Resume, Suspend, or Uninstall it. Right-clicking a checked app targets the full checked selection, including filtered-out apps, and shows the count in the menu. Every action opens the same target confirmation used by the bottom bar.
+- View the selection count and clear selections in the taller bottom bar. Restore, Block, and Uninstall appear on its right only when apps are selected; app categories are in the sidebar.
+- Right-click any app row to Restore, Block, or Uninstall it. Right-clicking a checked app targets the full checked selection, including filtered-out apps, and shows the count in the menu. Every action opens the same target confirmation used by the bottom bar.
 - Search names, package names, signing information, and permissions; filter user, system, suspended, and disabled apps.
-- Keep a persistent local history of every installation, uninstall, suspension, and resume result. History is grouped by `YYYY-MM-DD`, newest date first, with the time, device, Android user, and outcome for each app.
-- Batch uninstall, suspend (`pm suspend`), or resume (`pm unsuspend`) selected apps. Review the complete target list before execution, inspect individual results, and cancel remaining operations.
+- Keep a persistent local history of every installation, uninstall, suspension, resume, enable, and disable result. History is grouped by `YYYY-MM-DD`, newest date first, with the time, device, Android user, and outcome for each app.
+- Batch uninstall, block, or restore selected apps. Review the complete target list before execution, inspect individual results, and cancel remaining operations.
 - Drag a standalone `.apk` into the main window, or click **Install App** in the top toolbar, to install it on the current device for the selected Android user. The app list refreshes when installation completes.
 - Follow the desktop system language by default, with Chinese support and English fallback. Settings offers persistent **Follow system**, **English**, and **Chinese** choices.
 
@@ -62,8 +62,8 @@ You can also select **Actions > Release > Run workflow** to build downloadable a
 
 - **Install App:** installs a standalone APK on the current device for the selected Android user. The `-r` option allows updates while preserving existing app data. Installation does not automatically grant runtime permissions or allow version downgrades. Split APK sets, `.apks`, and `.xapk` bundles are not supported. The app list refreshes after completion.
 - **Uninstall:** runs `pm uninstall --user <ID> <package>`, removing the app and its data for that user. Preinstalled APKs on the system partition remain. Restoring a preinstalled package does not guarantee recovery of its data.
-- **Suspend:** uses Android package suspension and does not substitute disabling. Critical system apps, administrators, or device policy may reject the operation; each failure is reported separately.
-- **Resume:** removes suspension applied by the shell. Restrictions imposed by other administrators may remain.
+- **Block:** first runs `pm suspend --user <ID> <package>`. If the device reports that the command is unsupported (as on some Android TVs), it automatically uses `pm disable-user` for the same package and user. Data is preserved. Permission refusals, disconnects, and cancellation remain errors.
+- **Restore:** clears suspension with `pm unsuspend` or re-enables a disabled app with `pm enable`, according to its state. Apps that are both suspended and disabled need both steps. History records the concrete operation, and partial successes are retained if the next step fails.
 - Filtering does not clear existing selections. The confirmation window includes every selected app, including entries hidden by filters.
 - Cancellation does not undo completed operations. If the device disconnects or a command is canceled during execution, refresh the list to verify the device's state.
 - Permission information consists of PackageManager's requested permissions and grant flags. It does not show whether an app has used a permission and does not cover AppOps overrides or one-time access state.
