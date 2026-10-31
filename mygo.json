@@ -2,6 +2,6 @@
   "name": "App House",
   "identifier": "com.capytown.apphouse",
   "version": "0.1.1",
-  "buildVersion": 2,
+  "buildVersion": 3,
   "out": "build"
 }
