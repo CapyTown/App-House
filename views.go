@@ -203,7 +203,7 @@ func (a *app) toolbar(c *ui.Context) {
 	ui.Row(c).Height(max(88, bar.Height)).Padding(18, bar.Right+24, 18, 24).Gap(12).AlignItems(ui.Center).DragWindow().Children(func() {
 		ui.Column(c).Grow(1).MinWidth(80).Gap(3).Children(func() {
 			ui.Text(c, a.tr("应用")).FontSize(24).FontWeight(600)
-			subtitle, color := fmt.Sprintf(a.tr("%d 个应用 · %d 台设备"), len(a.rows), len(a.devices)), t.TextMuted
+			subtitle, color := fmt.Sprintf(a.tr("%d 个应用"), len(a.rows)), t.TextMuted
 			if a.busy || a.failed {
 				subtitle = a.tr(a.status)
 			}

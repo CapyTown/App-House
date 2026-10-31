@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"os/exec"
 	"slices"
 	"strings"
@@ -221,19 +220,5 @@ func (a *app) historySettings(c *ui.Context) {
 				ui.Text(c, a.historyMessage(entry)).FontSize(13).LineHeight(1.4).TextColor(color).Selectable()
 			})
 		}).Grow(1).MinHeight(0)
-		ui.Row(c).Justify(ui.End).Children(func() {
-			if ui.Button(c, a.tr("复制操作记录")).Height(36).Clicked() {
-				var lines []string
-				for _, row := range rows {
-					if row.index < 0 {
-						lines = append(lines, row.day)
-						continue
-					}
-					entry := a.history[row.index]
-					lines = append(lines, fmt.Sprintf("%s\t%s\t%s\t%s", a.historyMetadata(entry), a.historyAction(entry), entry.Package, a.historyMessage(entry)))
-				}
-				c.Services().WriteClipboard(strings.Join(lines, "\n"))
-			}
-		})
 	})
 }

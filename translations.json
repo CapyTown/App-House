@@ -156,5 +156,5 @@
   "无法保存设备记录。": "Unable to save device history.",
   "已保存的设备": "Saved devices",
   "设备操作": "Device actions",
-  "%d 个应用 · %d 台设备": "Apps: %d · Devices: %d"
+  "%d 个应用": "%d apps"
 }
