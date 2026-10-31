@@ -70,6 +70,10 @@ jobs:
           go tool mygo vet
       - name: Bundle ADB
         run: python scripts/bundle-adb.py "${{ matrix.adb }}"
+      - name: Bundle scrcpy
+        run: python scripts/bundle-scrcpy.py "${{ matrix.adb }}"
+      - name: Bundle FFmpeg
+        run: python scripts/bundle-ffmpeg.py "${{ matrix.adb }}"
       # MyGo downloads NSIS automatically on Windows when it is not installed.
       # Publishing belongs to the release job; these builds need no signing secrets.
       - name: Build installer

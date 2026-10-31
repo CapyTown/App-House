@@ -43,12 +43,21 @@ Mirroring settings are saved with the other preferences. They include **Stay awa
 
 scrcpy discovery checks a custom executable in Settings, `APPHOUSE_SCRCPY`, bundled platform resources, development resources, and installed scrcpy. Official packages include scrcpy **5.0.1**, its matching Android server, and its runtime dependencies. macOS selects the Intel or Apple Silicon binary automatically. App House passes the currently configured ADB executable and selected device explicitly to scrcpy. The embedded display uses a private local pipe and an FFmpeg decoder; no local streaming port is opened. FFmpeg discovery checks `APPHOUSE_FFMPEG`, bundled resources, development resources, and installed FFmpeg. Keyboard text entry and scrcpy keyboard shortcuts are not currently forwarded by the embedded display.
 
-## Build and bundle ADB
+## Build and bundle device tools
 
 ```sh
 # Download each platform's platform-tools from Google; requires Python 3.
 python3 scripts/bundle-adb.py darwin
 python3 scripts/bundle-adb.py windows
+
+# Download checksum-pinned scrcpy releases, including both Mac architectures.
+python3 scripts/bundle-scrcpy.py darwin
+python3 scripts/bundle-scrcpy.py windows
+
+# Build the minimal FFmpeg decoder on macOS (requires Xcode command-line tools).
+python3 scripts/bundle-ffmpeg.py darwin
+# Download the pinned Windows FFmpeg decoder.
+python3 scripts/bundle-ffmpeg.py windows
 
 # Alternatively, copy tools from a local SDK for the matching platform.
 python3 scripts/bundle-adb.py darwin --from-sdk "$ANDROID_HOME/platform-tools"
@@ -57,15 +66,21 @@ python3 scripts/bundle-adb.py darwin --from-sdk "$ANDROID_HOME/platform-tools"
 go tool mygo build -platform darwin/universal,windows/amd64 -skip-dmg
 ```
 
-The application outputs are `build/darwin-universal/App House.app` and `build/windows-amd64/App House.exe`. Portable archives are named `App-House-macOS.zip` and `App-House-Windows.zip`. Keep the `platform-tools` directory beside the executable when distributing the Windows portable app.
+The application outputs are `build/darwin-universal/App House.app` and `build/windows-amd64/App House.exe`. Portable archives are named `App-House-macOS.zip` and `App-House-Windows.zip`. Keep the `platform-tools`, `scrcpy`, and `ffmpeg` directories beside the executable when distributing the Windows portable app.
 
 MyGo selects `resources/darwin` and `resources/windows` for the corresponding platforms. Downloaded tools are excluded from source control. The bundling script preserves ADB's `NOTICE.txt`, version, and source information, and supports `--url` and `--sha256` to pin an official archive. Building without bundled resources is also supported, but an existing ADB installation is then required at runtime.
+
+The scrcpy bundler preserves the official portable archive contents, including its license, server, and supporting libraries, and writes the release source and SHA-256 to `origin.json`. Downloads are pinned to the hashes published by [scrcpy's macOS](https://github.com/Genymobile/scrcpy/blob/v5.0.1/doc/macos.md) and [Windows](https://github.com/Genymobile/scrcpy/blob/v5.0.1/doc/windows.md) installation documentation. For offline builds, pass `--archive` with the original official filename; on macOS, pass it twice for the `aarch64` and `x86_64` archives. The same checksum verification applies to local archives. Without bundled scrcpy, install it separately or select a custom executable in Settings.
+
+The FFmpeg bundler builds a minimal LGPL decoder for Apple Silicon and Intel Macs from checksum-pinned [official FFmpeg 9.0.2 source](https://ffmpeg.org/releases/ffmpeg-9.0.2.tar.xz). Only the H.264/Matroska decoding, scaling, and MJPEG frame output needed by the embedded mirror are enabled; external library detection, networking, GPL, and nonfree components are disabled. Each binary includes its complete source archive, LGPL license, and reproducible commands in `BUILD.json`.
+
+Windows uses the x64 GPL build from the third-party [ffmpeg-static `b6.1.1` release](https://github.com/eugeneware/ffmpeg-static/releases/tag/b6.1.1), verified against GitHub's published SHA-256. Its original builder is Gyan; upstream README, license, full GPLv3 text, and source references are preserved. Both platforms record provenance in `origin.json` and `SOURCE.txt`. For offline builds, use `--from-directory`: supply `ffmpeg-9.0.2.tar.xz` for macOS, or `ffmpeg-win32-x64.gz`, `win32-x64.LICENSE`, and `win32-x64.README` for Windows.
 
 On macOS, omit `-skip-dmg` to create a DMG. Windows installers require NSIS. The default artifacts are not Developer ID notarized or Windows code signed; see [MyGo's distribution documentation](https://mygo.egoist.dev/docs/distribution) for signing configuration.
 
 ## GitHub releases
 
-The [Release workflow](.github/workflows/release.yml) builds a universal macOS DMG (Intel and Apple Silicon) and a Windows x64 installer EXE, both with bundled ADB. Each platform runs tests and static checks before building. MyGo downloads NSIS on the Windows runner when needed.
+The [Release workflow](.github/workflows/release.yml) builds a universal macOS DMG (Intel and Apple Silicon) and a Windows x64 installer EXE, both with bundled ADB, scrcpy, and FFmpeg. Each platform runs tests and static checks before building. MyGo downloads NSIS on the Windows runner when needed.
 
 To publish, update `version` as needed and increment `buildVersion` in `mygo.json`, commit the change, and push a matching `v<version>-<buildVersion>` tag (for example, `v0.1.0-1`). The workflow rejects tags that do not match the configured version and build number. Once both builds succeed, a separate job publishes the installers to a GitHub Release using the built-in `GITHUB_TOKEN`; no additional secrets are required.
 
