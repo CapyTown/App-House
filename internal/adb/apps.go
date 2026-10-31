@@ -39,6 +39,12 @@ func (c *Client) Apps(ctx context.Context, serial string, user int) ([]App, erro
 	command := "CLASSPATH=" + shellQuote(remote) + " " + joinShell("app_process", "/", "com.androidfun.Inspector", strconv.Itoa(user))
 	output, err := c.command(ctx, 5*time.Minute, "-s", serial, "shell", command)
 	if err != nil {
+		// Prefer the inspector's fatal error over unrelated vendor linker noise.
+		// A nonzero exit must never turn a partial inventory into a success.
+		_, parseErr := parseApps(output)
+		if fatal, ok := errors.AsType[*inspectorError](parseErr); ok {
+			return nil, fmt.Errorf("inspect apps: %w", fatal)
+		}
 		return nil, fmt.Errorf("inspect apps: %w", err)
 	}
 	return parseApps(output)
@@ -79,6 +85,10 @@ func cachedInspector() (path, hash string, err error) {
 	}
 	return path, hash, nil
 }
+
+type inspectorError struct{ message string }
+
+func (e *inspectorError) Error() string { return "Android inspector: " + e.message }
 
 func parseApps(output []byte) ([]App, error) {
 	apps := []App{}
@@ -126,7 +136,7 @@ func parseApps(output []byte) ([]App, error) {
 			}
 			done = true
 		case "error":
-			return nil, fmt.Errorf("Android inspector: %s", record.Message)
+			return nil, &inspectorError{message: record.Message}
 		default:
 			return nil, fmt.Errorf("unknown inspector record type %q", record.Type)
 		}

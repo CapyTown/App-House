@@ -37,7 +37,9 @@ or company. It can be empty. `sha256` hashes each certificate's encoded bytes.
 Icons are base64-encoded 64 × 64 PNG images. Per-package resource or certificate
 failures produce `warnings` and leave the affected fields empty.
 
-The shell context uses Android's hidden `ActivityThread` and user-context APIs.
+The shell context uses Android's hidden `ActivityThread` and
+`createPackageContextAsUser` APIs, retaining shell attribution and the requested
+user. This also supports Android 8 vendor builds without `createContextAsUser`.
 These may differ on vendor builds or future Android releases. Cross-user access
 can be denied by device policy; failures are reported rather than silently
 falling back to a different user. Compilation does not replace testing on actual

@@ -130,3 +130,29 @@ func TestAppsCacheFailureAndCancellation(t *testing.T) {
 		t.Fatalf("cancellation should precede cache access: %v", err)
 	}
 }
+
+func TestAppsReportsFatalErrorBeforeVendorWarnings(t *testing.T) {
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("LOCALAPPDATA", t.TempDir())
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	for _, output := range []string{
+		"WARNING: linker: unused DT entry\n" + `{"type":"error","message":"NoSuchMethodException: createContextAsUser"}`,
+		`{"type":"done","count":0}`,
+	} {
+		client := Client{Path: "adb", run: func(_ context.Context, _ string, args ...string) ([]byte, error) {
+			if args[2] == "push" {
+				return nil, nil
+			}
+			return []byte(output), errors.New("exit status 1")
+		}}
+		apps, err := client.Apps(t.Context(), "tv", 0)
+		if err == nil || apps != nil {
+			t.Fatal("nonzero inspector exit must fail even with a complete inventory")
+		}
+		if strings.Contains(output, `"type":"error"`) {
+			if !strings.Contains(err.Error(), "NoSuchMethodException") || strings.Contains(err.Error(), "WARNING: linker") {
+				t.Fatalf("fatal cause hidden by vendor diagnostics: %v", err)
+			}
+		}
+	}
+}

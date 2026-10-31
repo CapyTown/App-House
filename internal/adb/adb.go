@@ -89,7 +89,7 @@ func (c *Client) command(ctx context.Context, timeout time.Duration, args ...str
 		return nil, fmt.Errorf("ADB command interrupted: %w", ctx.Err())
 	}
 	if err != nil {
-		return nil, fmt.Errorf("ADB: %w: %s", err, strings.TrimSpace(string(output)))
+		return output, fmt.Errorf("ADB: %w: %s", err, strings.TrimSpace(string(output)))
 	}
 	return output, nil
 }

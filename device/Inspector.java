@@ -79,13 +79,13 @@ public final class Inspector {
         Class<?> activityThread = Class.forName("android.app.ActivityThread");
         Object thread = activityThread.getMethod("systemMain").invoke(null);
         Context system = (Context) activityThread.getMethod("getSystemContext").invoke(thread);
-        // Use the real caller package for attribution checks on recent Android versions.
-        Context shell = system.createPackageContext("com.android.shell", 0);
         Constructor<UserHandle> constructor = UserHandle.class.getDeclaredConstructor(int.class);
         constructor.setAccessible(true);
         UserHandle user = constructor.newInstance(userId);
-        return (Context) Context.class.getMethod("createContextAsUser", UserHandle.class, int.class)
-                .invoke(shell, user, 0);
+        // This API is available on Android 8 vendor builds that lack createContextAsUser.
+        // Preserve both shell attribution and the explicitly selected Android user.
+        return (Context) Context.class.getMethod("createPackageContextAsUser", String.class, int.class, UserHandle.class)
+                .invoke(system, "com.android.shell", 0, user);
     }
 
     private static JSONObject describe(PackageManager manager, PackageInfo info) throws Exception {
