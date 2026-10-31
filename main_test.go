@@ -166,8 +166,8 @@ func TestDevicesWithSameModelHaveDistinctControls(t *testing.T) {
 	a := sampleApp()
 	a.devices = append(a.devices, adb.Device{Serial: "second-device", Model: "Pixel_9", State: "unauthorized"})
 	tt := ui.NewTester(a.launcherView, 480, 540)
-	if !tt.HasText("second-device · 待授权") || !tt.HasText("test-device · 已连接") {
-		t.Fatal("same-model devices must remain identifiable")
+	if !tt.HasText("USB") || a.launcherList.Label(0) == a.launcherList.Label(1) {
+		t.Fatal("same-model devices must retain distinct accessible row labels")
 	}
 }
 

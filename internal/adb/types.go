@@ -1,9 +1,24 @@
 package adb
 
 type Device struct {
-	Serial string
-	State  string
-	Model  string
+	Serial         string
+	State          string
+	Model          string
+	Manufacturer   string
+	Brand          string
+	MarketName     string
+	AndroidVersion string
+	SDK            string
+}
+
+// DeviceInfo contains the device's own reported product and Android metadata.
+type DeviceInfo struct {
+	Model          string
+	Manufacturer   string
+	Brand          string
+	MarketName     string
+	AndroidVersion string
+	SDK            string
 }
 
 type User struct {

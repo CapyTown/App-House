@@ -4,7 +4,6 @@
   "%d 条操作记录": "%d operations",
   "\n主体：": "\nSubject: ",
   "%d / %d 已授权": "%d / %d granted",
-  "%d 个应用 · %d 台设备": "Apps: %d · Devices: %d",
   "%s · 用户 %d": "%s · User %d",
   "%s完成：%d 成功，%d 失败或取消 · %s / 用户 %d": "%s complete: %d succeeded, %d failed or canceled · %s / user %d",
   "/path/to/adb 或 C:\\platform-tools\\adb.exe": "/path/to/adb or C:\\platform-tools\\adb.exe",
@@ -150,5 +149,12 @@
   "启用将恢复所选用户已停用的应用，不会解除暂停状态。": "Enable restores disabled apps for the selected user. It does not clear suspension.",
   "禁止": "Block",
   "禁止会先尝试暂停应用；设备不支持时自动改为停用。恢复会按应用状态解除暂停或重新启用，应用数据会保留。": "Block first tries suspension, then disables the app if the device does not support it. Restore clears suspension or re-enables the app as needed, preserving app data.",
-  "成功（已解除暂停并启用）": "Success (resumed and enabled)"
+  "成功（已解除暂停并启用）": "Success (resumed and enabled)",
+  "移除设备记录": "Forget device",
+  "移除保存的设备记录，不会断开当前连接。": "Remove the saved device without disconnecting it.",
+  "设备记录已移除。": "Saved device removed.",
+  "无法保存设备记录。": "Unable to save device history.",
+  "已保存的设备": "Saved devices",
+  "设备操作": "Device actions",
+  "%d 个应用 · %d 台设备": "Apps: %d · Devices: %d"
 }

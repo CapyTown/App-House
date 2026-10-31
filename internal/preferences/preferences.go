@@ -1,6 +1,7 @@
 package preferences
 
 import (
+	"cmp"
 	"encoding/json/v2"
 	"errors"
 	"fmt"
@@ -17,9 +18,14 @@ const (
 )
 
 type Device struct {
-	Serial   string    `json:"serial"`
-	Model    string    `json:"model"`
-	LastSeen time.Time `json:"lastSeen"`
+	Serial         string    `json:"serial"`
+	Model          string    `json:"model"`
+	LastSeen       time.Time `json:"lastSeen"`
+	Manufacturer   string    `json:"manufacturer,omitempty"`
+	Brand          string    `json:"brand,omitempty"`
+	MarketName     string    `json:"marketName,omitempty"`
+	AndroidVersion string    `json:"androidVersion,omitempty"`
+	SDK            string    `json:"sdk,omitempty"`
 }
 
 type Config struct {
@@ -101,17 +107,37 @@ func Save(path string, config Config) error {
 
 // Remember refreshes one device while retaining its last known model if unknown.
 func (c *Config) Remember(serial, model string, now time.Time) {
-	if serial == "" {
-		return
+	c.RememberDevice(Device{Serial: serial, Model: model}, now)
+}
+
+// RememberDevice updates known metadata, retaining properties a device did not
+// report this time. The result indicates whether anything changed.
+func (c *Config) RememberDevice(device Device, now time.Time) bool {
+	if device.Serial == "" {
+		return false
 	}
-	if model == "" {
-		for _, device := range c.Devices {
-			if device.Serial == serial && device.Model != "" {
-				model = device.Model
-			}
+	device.LastSeen = now
+	if index := slices.IndexFunc(c.Devices, func(old Device) bool { return old.Serial == device.Serial }); index >= 0 {
+		old := c.Devices[index]
+		device.Model = cmp.Or(device.Model, old.Model)
+		device.Manufacturer = cmp.Or(device.Manufacturer, old.Manufacturer)
+		device.Brand = cmp.Or(device.Brand, old.Brand)
+		device.MarketName = cmp.Or(device.MarketName, old.MarketName)
+		device.AndroidVersion = cmp.Or(device.AndroidVersion, old.AndroidVersion)
+		device.SDK = cmp.Or(device.SDK, old.SDK)
+		if device == old {
+			return false
 		}
 	}
-	c.Devices = normalize(append(c.Devices, Device{Serial: serial, Model: model, LastSeen: now}))
+	c.Devices = normalize(append(c.Devices, device))
+	return true
+}
+
+// Forget removes a saved device without affecting its live connection.
+func (c *Config) Forget(serial string) bool {
+	before := len(c.Devices)
+	c.Devices = slices.DeleteFunc(c.Devices, func(device Device) bool { return device.Serial == serial })
+	return len(c.Devices) != before
 }
 
 func normalize(devices []Device) []Device {

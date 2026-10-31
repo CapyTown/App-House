@@ -116,6 +116,39 @@ func TestRememberUpdatesAndBoundsHistory(t *testing.T) {
 	}
 }
 
+func TestForgetPersistsRemovalAndPreservesOtherPreferences(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "preferences.json")
+	config := Config{Language: "en", ADBPath: "/custom/adb", Devices: []Device{{Serial: "first"}, {Serial: "forget"}, {Serial: "last"}}}
+	if !config.Forget("forget") || config.Forget("missing") {
+		t.Fatal("forget must report whether a saved entry was removed")
+	}
+	if err := Save(path, config); err != nil {
+		t.Fatal(err)
+	}
+	got, err := Load(path)
+	if err != nil || len(got.Devices) != 2 || got.Devices[0].Serial != "first" || got.Devices[1].Serial != "last" || got.Language != "en" || got.ADBPath != "/custom/adb" {
+		t.Fatalf("forget changed unrelated preferences or failed to persist: %#v, %v", got, err)
+	}
+}
+
+func TestRememberDevicePreservesAndPersistsMetadata(t *testing.T) {
+	now := time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC)
+	want := Device{Serial: "serial", Model: "PJF110", Manufacturer: "OPPO", Brand: "OnePlus", MarketName: "Phone", AndroidVersion: "15", SDK: "35", LastSeen: now}
+	var config Config
+	if !config.RememberDevice(want, now) || config.RememberDevice(Device{Serial: "serial"}, now) {
+		t.Fatal("unchanged or missing properties should retain metadata")
+	}
+	config.Remember("serial", "", now)
+	path := filepath.Join(t.TempDir(), "preferences.json")
+	if err := Save(path, config); err != nil {
+		t.Fatal(err)
+	}
+	stored, err := Load(path)
+	if err != nil || len(stored.Devices) != 1 || stored.Devices[0] != want {
+		t.Fatalf("cached metadata lost: %#v, %v", stored, err)
+	}
+}
+
 func TestSaveFailurePreservesPreviousFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "preferences.json")
 	if err := Save(path, Config{ADBPath: "original"}); err != nil {

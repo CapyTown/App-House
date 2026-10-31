@@ -107,6 +107,7 @@ func (a *app) run(label string, work func(context.Context) (func(), error)) {
 
 func (a *app) refreshDevices() {
 	client := a.client
+	previous := slices.Clone(a.devices)
 	a.run(a.tr("正在查找设备…"), func(ctx context.Context) (func(), error) {
 		if client.Path == "" {
 			path, err := adb.Discover()
@@ -119,12 +120,37 @@ func (a *app) refreshDevices() {
 		if err != nil {
 			return nil, err
 		}
+		if err := enrichDeviceInfo(ctx, client, devices, previous); err != nil {
+			return nil, err
+		}
 		return func() {
 			a.client, a.adbPath = client, client.Path
 			a.acceptDevices(devices)
 			a.status = fmt.Sprintf(a.tr("发现 %d 台设备。选择设备以读取应用。"), len(devices))
 		}, err
 	})
+}
+
+func enrichDeviceInfo(ctx context.Context, client adb.Client, devices, previous []adb.Device) error {
+	for i := range devices {
+		device := &devices[i]
+		if device.State != "device" {
+			continue
+		}
+		old := slices.IndexFunc(previous, func(d adb.Device) bool {
+			return d.Serial == device.Serial && d.State == "device" && d.Manufacturer != ""
+		})
+		if old >= 0 {
+			d := previous[old]
+			device.ApplyInfo(adb.DeviceInfo{Model: d.Model, Manufacturer: d.Manufacturer, Brand: d.Brand, MarketName: d.MarketName, AndroidVersion: d.AndroidVersion, SDK: d.SDK})
+		} else if info, infoErr := client.Info(ctx, device.Serial); infoErr == nil {
+			device.ApplyInfo(info)
+		}
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+	}
+	return nil
 }
 
 func (a *app) clearDevice() {

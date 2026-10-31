@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"slices"
 	"strings"
 
 	"androidfun/internal/adb"
@@ -126,12 +127,16 @@ func (a *app) connectionSettings(c *ui.Context) {
 				ui.TextInput(c, &a.address).Height(40).Label(a.tr("连接地址")).Placeholder(a.tr("IP:连接端口，例如 192.168.1.20:37123")).Grow(1).MinWidth(0).Disabled(locked)
 				if ui.PrimaryButton(c, a.tr("连接")).Height(36).Disabled(locked || a.client.Path == "").Clicked() {
 					client, address := a.client, strings.TrimSpace(a.address)
+					previous := slices.Clone(a.devices)
 					a.run(a.tr("正在连接…"), func(ctx context.Context) (func(), error) {
 						if err := client.Connect(ctx, address); err != nil {
 							return nil, err
 						}
 						devices, err := client.Devices(ctx)
 						if err != nil {
+							return nil, err
+						}
+						if err := enrichDeviceInfo(ctx, client, devices, previous); err != nil {
 							return nil, err
 						}
 						return func() {
@@ -147,6 +152,7 @@ func (a *app) connectionSettings(c *ui.Context) {
 			if a.confirmOpen {
 				ui.Text(c, a.tr("请先完成或取消主窗口中的批量操作确认。")).FontSize(12).TextColor(t.TextMuted)
 			}
+			a.rememberedDevices(c)
 		})
 	})
 }

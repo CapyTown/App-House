@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"slices"
 	"strings"
 	"time"
@@ -57,12 +58,23 @@ func (a *app) acceptDevices(devices []adb.Device) {
 			continue
 		}
 		wasOnline := slices.ContainsFunc(a.devices, func(old adb.Device) bool {
-			return old.Serial == device.Serial && old.State == "device" && old.Model == device.Model
+			return old.Serial == device.Serial && old.State == "device"
 		})
-		remembered := slices.ContainsFunc(a.config.Devices, func(old preferences.Device) bool { return old.Serial == device.Serial })
-		if !wasOnline || !remembered {
-			a.config.Remember(device.Serial, device.Model, time.Now())
-			changed = true
+		// Forgetting a connected device lasts until it reconnects, instead of
+		// being undone by the launcher's next discovery poll.
+		remembered := slices.IndexFunc(a.config.Devices, func(old preferences.Device) bool { return old.Serial == device.Serial })
+		if !wasOnline || remembered >= 0 {
+			seen := time.Now()
+			if wasOnline {
+				seen = a.config.Devices[remembered].LastSeen
+			}
+			model := device.Model
+			if model == device.Serial {
+				model = ""
+			}
+			updated := a.config.RememberDevice(preferences.Device{Serial: device.Serial, Model: model,
+				Manufacturer: device.Manufacturer, Brand: device.Brand, MarketName: device.MarketName, AndroidVersion: device.AndroidVersion, SDK: device.SDK}, seen)
+			changed = changed || updated
 		}
 	}
 	a.devices = devices
@@ -74,8 +86,84 @@ func (a *app) acceptDevices(devices []adb.Device) {
 	}
 }
 
+func (a *app) deviceRemembered(serial string) bool {
+	return slices.ContainsFunc(a.config.Devices, func(device preferences.Device) bool { return device.Serial == serial })
+}
+
+func (a *app) forgetDevice(serial string) {
+	if !a.deviceRemembered(serial) {
+		return
+	}
+	if a.configPath == "" {
+		if a.preferenceError == "" {
+			a.preferenceError = a.tr("无法保存设备记录。")
+		}
+		a.status, a.failed = a.preferenceError, true
+		a.invalidateWindows()
+		return
+	}
+	config := a.config
+	config.Devices = slices.Clone(config.Devices)
+	config.Forget(serial)
+	if err := preferences.Save(a.configPath, config); err != nil {
+		a.preferenceError = a.tr("无法保存设置：") + err.Error()
+		a.status, a.failed = a.preferenceError, true
+		a.invalidateWindows()
+		return
+	}
+	selectedSerial := ""
+	devices := a.launcherDevices()
+	if a.launcherSelection >= 0 && a.launcherSelection < len(devices) {
+		selectedSerial = devices[a.launcherSelection].Serial
+	}
+	a.config = config
+	a.launcherSelection = slices.IndexFunc(a.launcherDevices(), func(device adb.Device) bool { return device.Serial == selectedSerial })
+	a.preferenceError = ""
+	a.status, a.failed = a.tr("设备记录已移除。"), false
+	a.invalidateWindows()
+}
+
+func (a *app) deviceMenu(m *ui.Menu, serial string) {
+	if a.deviceRemembered(serial) {
+		if m.Item(a.tr("移除设备记录")).Disabled(a.busy).Chosen() {
+			a.forgetDevice(serial)
+		}
+	}
+}
+
 func (a *app) deviceOnline(serial string) bool {
 	return slices.ContainsFunc(a.devices, func(device adb.Device) bool { return device.Serial == serial && device.State == "device" })
+}
+
+func (a *app) rememberedDevices(c *ui.Context) {
+	if len(a.config.Devices) == 0 {
+		return
+	}
+	t := c.Theme()
+	ui.Divider(c)
+	ui.Text(c, a.tr("已保存的设备")).FontSize(16).FontWeight(600)
+	ui.Text(c, a.tr("移除保存的设备记录，不会断开当前连接。")).FontSize(13).LineHeight(1.4).TextColor(t.TextMuted)
+	ui.Column(c).Gap(8).Children(func() {
+		for _, device := range a.config.Devices {
+			ui.Row(c).Key(device.Serial).Height(68).FillWidth().Padding(8, 16).Gap(14).Radius(12).Background(t.Surface).AlignItems(ui.Center).Children(func() {
+				ui.Image(c, androidGlyph).Size(28, 28)
+				ui.Column(c).Grow(1).MinWidth(0).Gap(5).Children(func() {
+					known := rememberedDevice(device)
+					name := deviceName(known)
+					ui.Text(c, name).FontSize(14).FontWeight(600).SingleLine().Tooltip(name)
+					if metadata := deviceConnectionLabel(known); metadata != "" {
+						ui.Text(c, metadata).FontSize(12.5).TextColor(t.TextMuted).SingleLine().Tooltip(metadata)
+					}
+				})
+				color := t.TextMuted
+				if a.deviceOnline(device.Serial) {
+					color = t.Success
+				}
+				ui.Box(c).Size(8, 8).Radius(4).Background(color)
+				iconButton(c, a.tr("设备操作"), moreGlyph, a.busy).PopoverMenuButton(func(m *ui.Menu) { a.deviceMenu(m, device.Serial) })
+			})
+		}
+	})
 }
 
 func (a *app) launcherDevices() []adb.Device {
@@ -83,9 +171,17 @@ func (a *app) launcherDevices() []adb.Device {
 	for _, remembered := range a.config.Devices {
 		index := slices.IndexFunc(devices, func(d adb.Device) bool { return d.Serial == remembered.Serial })
 		if index < 0 {
-			devices = append(devices, adb.Device{Serial: remembered.Serial, Model: remembered.Model, State: "offline"})
-		} else if devices[index].Model == "" || devices[index].Model == devices[index].Serial {
-			devices[index].Model = remembered.Model
+			devices = append(devices, rememberedDevice(remembered))
+		} else {
+			d := &devices[index]
+			if d.Model == "" || d.Model == d.Serial {
+				d.Model = remembered.Model
+			}
+			d.Manufacturer = cmp.Or(d.Manufacturer, remembered.Manufacturer)
+			d.Brand = cmp.Or(d.Brand, remembered.Brand)
+			d.MarketName = cmp.Or(d.MarketName, remembered.MarketName)
+			d.AndroidVersion = cmp.Or(d.AndroidVersion, remembered.AndroidVersion)
+			d.SDK = cmp.Or(d.SDK, remembered.SDK)
 		}
 	}
 	slices.SortStableFunc(devices, func(a, b adb.Device) int {
@@ -101,10 +197,50 @@ func (a *app) launcherDevices() []adb.Device {
 }
 
 func deviceName(device adb.Device) string {
-	if device.Model != "" {
-		return strings.ReplaceAll(device.Model, "_", " ")
+	if device.MarketName != "" {
+		return strings.ReplaceAll(device.MarketName, "_", " ")
+	}
+	model := strings.ReplaceAll(device.Model, "_", " ")
+	manufacturer := cmp.Or(device.Manufacturer, device.Brand)
+	if model != "" && model != device.Serial {
+		if manufacturer != "" && !strings.HasPrefix(strings.ToLower(model), strings.ToLower(manufacturer)) {
+			return manufacturer + " " + model
+		}
+		return model
 	}
 	return device.Serial
+}
+
+func rememberedDevice(device preferences.Device) adb.Device {
+	return adb.Device{Serial: device.Serial, Model: device.Model, State: "offline", Manufacturer: device.Manufacturer,
+		Brand: device.Brand, MarketName: device.MarketName, AndroidVersion: device.AndroidVersion, SDK: device.SDK}
+}
+
+func deviceConnectionLabel(device adb.Device) string {
+	var parts []string
+	if device.AndroidVersion != "" {
+		parts = append(parts, "Android "+device.AndroidVersion)
+	}
+	if adb.IsNetworkDevice(device.Serial) {
+		parts = append(parts, device.Serial)
+	} else {
+		parts = append(parts, "USB")
+	}
+	return strings.Join(parts, " · ")
+}
+
+func deviceMetadata(device adb.Device) string {
+	var parts []string
+	for _, part := range []string{device.Manufacturer, device.Brand, device.Model} {
+		part = strings.ReplaceAll(part, "_", " ")
+		if part != "" && part != device.Serial && !slices.ContainsFunc(parts, func(old string) bool { return strings.EqualFold(old, part) }) {
+			parts = append(parts, part)
+		}
+	}
+	if device.AndroidVersion != "" {
+		parts = append(parts, "Android "+device.AndroidVersion)
+	}
+	return strings.Join(parts, " · ")
 }
 
 func launcherOptions(content *ui.Content) mygo.WindowOptions {
@@ -173,24 +309,32 @@ func (a *app) launcherView(c *ui.Context) {
 			if i == a.launcherSelection {
 				text, muted = t.AccentText, t.AccentText
 			}
-			row := ui.Row(c).Height(72).FillWidth().Padding(12, 16).Gap(14).AlignItems(ui.Center).Children(func() {
+			row := ui.Row(c).Height(68).FillWidth().Padding(8, 16).Gap(14).AlignItems(ui.Center).Children(func() {
 				ui.Image(c, androidGlyph).Size(28, 28)
 				ui.Column(c).Grow(1).MinWidth(0).Gap(5).Children(func() {
 					ui.Text(c, deviceName(device)).FontSize(14).FontWeight(600).TextColor(text).SingleLine().Tooltip(deviceName(device))
-					state := a.tr("离线")
-					if device.State == "device" {
-						state = a.tr("已连接")
-					} else if device.State == "unauthorized" {
-						state = a.tr("待授权")
+					if metadata := deviceConnectionLabel(device); metadata != "" {
+						ui.Text(c, metadata).FontSize(12.5).TextColor(muted).SingleLine().Tooltip(metadata)
 					}
-					ui.Text(c, device.Serial+" · "+state).FontSize(12.5).TextColor(muted).SingleLine().Tooltip(device.Serial + " · " + state)
 				})
 				color := t.TextMuted
 				if device.State == "device" {
 					color = t.Success
 				}
-				ui.Box(c).Size(8, 8).Radius(4).Background(color)
+				state := a.tr("离线")
+				if device.State == "device" {
+					state = a.tr("已连接")
+				} else if device.State == "unauthorized" {
+					state = a.tr("待授权")
+				}
+				ui.Box(c).Size(8, 8).Radius(4).Background(color).Tooltip(state + " · " + device.Serial)
+				if a.deviceRemembered(device.Serial) {
+					iconButton(c, a.tr("设备操作"), moreGlyph, a.busy).TextColor(muted).PopoverMenuButton(func(m *ui.Menu) { a.deviceMenu(m, device.Serial) })
+				}
 			})
+			if a.deviceRemembered(device.Serial) {
+				row.PopoverMenu(func(m *ui.Menu) { a.deviceMenu(m, device.Serial) })
+			}
 			if row.RowDoubleClicked() {
 				a.openMain(device.Serial)
 			}

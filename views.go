@@ -26,6 +26,8 @@ var (
 	refreshGlyph  = glyph(`<path d="M16 7a6 6 0 1 0 0 6M16 3v4h-4"/>`)
 	panelGlyph    = glyph(`<rect x="2" y="3" width="16" height="14" rx="2"/><path d="M12 3v14"/>`)
 	closeGlyph    = glyph(`<path d="M5 5l10 10M15 5L5 15"/>`)
+	chevronGlyph  = glyph(`<path d="m5 8 5 5 5-5"/>`)
+	moreGlyph     = glyph(`<circle cx="4" cy="10" r="1"/><circle cx="10" cy="10" r="1"/><circle cx="16" cy="10" r="1"/>`)
 )
 
 type viewColors struct{ sidebar, inspector, stripe ui.Color }
@@ -91,7 +93,7 @@ func (a *app) view(c *ui.Context) {
 }
 
 func iconButton(c *ui.Context, label string, icon *ui.SVG, disabled bool) ui.Element {
-	return ui.ButtonBase(c).Size(40, 40).Radius(20).Center().Label(label).Tooltip(label).Disabled(disabled).Children(func() { ui.Icon(c, icon).Size(20, 20).TextColor(c.Theme().TextMuted) })
+	return ui.ButtonBase(c).Size(40, 40).Radius(20).Center().Label(label).Tooltip(label).Disabled(disabled).TextColor(c.Theme().TextMuted).Children(func() { ui.Icon(c, icon).Size(20, 20) })
 }
 
 func navItem(c *ui.Context, label, count string, icon *ui.SVG, selected, disabled bool) bool {
@@ -113,29 +115,40 @@ func (a *app) sidebar(c *ui.Context) {
 	ui.Row(c).Height(max(52, c.TitleBar().Height)).DragWindow()
 	ui.Column(c).Padding(8, 14, 20).Gap(10).Children(func() {
 		ui.Text(c, a.tr("设备")).FontSize(12).FontWeight(600).TextColor(t.TextMuted)
-		options, serials := []string{}, []string{}
-		selected := a.tr("选择设备")
+		selectedSerial := a.serial
+		selectedName := a.tr("选择设备")
+		online := []adb.Device{}
 		for _, device := range a.devices {
-			if device.State != "device" {
-				continue
-			}
-			name := strings.ReplaceAll(device.Model, "_", " ")
-			if name == "" {
-				name = "Android"
-			}
-			label := name + " · " + device.Serial
-			options, serials = append(options, label), append(serials, device.Serial)
-			if device.Serial == a.serial {
-				selected = label
+			if device.State == "device" {
+				online = append(online, device)
+				if device.Serial == selectedSerial {
+					selectedName = deviceName(device)
+				}
 			}
 		}
-		if len(options) == 0 {
-			selected = a.tr("未连接设备")
+		if len(online) == 0 {
+			selectedName = a.tr("未连接设备")
 		}
-		if ui.Select(c, &selected, options).FillWidth().Height(44).Padding(0, 14).Radius(22).Background(ui.Hex("#ffffff")).TextColor(ui.Hex("#242426")).Border(0, ui.Transparent).Label(a.tr("选择设备")).Tooltip(selected).Disabled(a.busy || a.confirmOpen || len(options) == 0).Changed() {
-			if index := slices.Index(options, selected); index >= 0 {
-				a.chooseDevice(serials[index])
-			}
+		// Bind options to serials, so identically named devices remain selectable.
+		selectDevice := ui.SelectBase(c, &selectedSerial)
+		selectDevice.Trigger.FillWidth().Height(44).Padding(0, 14).Radius(22).Background(ui.Hex("#ffffff")).TextColor(ui.Hex("#242426")).Border(0, ui.Transparent).Label(a.tr("选择设备")).Tooltip(selectedName).Disabled(a.busy || a.confirmOpen || len(online) == 0).Gap(8).AlignItems(ui.Center).Children(func() {
+			ui.Text(c, selectedName).SingleLine().Grow(1).MinWidth(0)
+			ui.Icon(c, chevronGlyph).Size(16, 16).TextColor(t.TextMuted)
+		})
+		selectDevice.Popup(func(panel ui.Element) {
+			panel.Padding(4).Radius(12).Background(t.Background).Border(1, t.Border).MinWidth(204)
+			ui.Scroll(c).MaxHeight(320).Children(func() {
+				for _, device := range online {
+					item := selectDevice.Item(device.Serial).Padding(8, 10).Radius(8)
+					if item.Highlighted() {
+						item.Background(t.Accent).TextColor(t.AccentText)
+					}
+					item.Children(func() { ui.Text(c, deviceName(device)).SingleLine() })
+				}
+			})
+		})
+		if selectDevice.Trigger.Changed() {
+			a.chooseDevice(selectedSerial)
 		}
 	})
 	ui.Scroll(c).Grow(1).Children(func() {
